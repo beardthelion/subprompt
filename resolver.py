@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 import unicodedata
 from collections import OrderedDict
 from typing import Any, Callable, List, Optional, Tuple
@@ -18,6 +19,10 @@ logger = logging.getLogger(__name__)
 MAX_RESULT_CHARS = 300
 MAX_MARKERS = 3
 CACHE_SIZE = 256
+# Disambiguation runs in the agent's own turn thread (off the gateway loop),
+# so a slow main model only delays that one reply. Generous default; the
+# main agent model can be heavyweight. Override via SUBPROMPT_LLM_TIMEOUT.
+RESOLVE_TIMEOUT = float(os.getenv("SUBPROMPT_LLM_TIMEOUT", "12"))
 
 # Plain-text completion (no response_format/json_schema) so the call works
 # across providers — DeepSeek and others reject structured response_format.
@@ -153,7 +158,7 @@ def _extract_snippet(response: Any) -> Optional[str]:
     return _truncate(_sanitize(raw))
 
 
-def disambiguate(llm: Any, query: str, timeout: float = 2.5) -> Tuple[Optional[str], float]:
+def disambiguate(llm: Any, query: str, timeout: float = RESOLVE_TIMEOUT) -> Tuple[Optional[str], float]:
     """Resolve a fuzzy phrase to a canonical term via the host LLM.
 
     Returns ``(term, confidence)`` or ``(None, 0.0)`` on any failure.
@@ -166,6 +171,7 @@ def disambiguate(llm: Any, query: str, timeout: float = 2.5) -> Tuple[Optional[s
         overrides["provider"] = os.getenv("SUBPROMPT_LLM_PROVIDER")
     if os.getenv("SUBPROMPT_LLM_MODEL"):
         overrides["model"] = os.getenv("SUBPROMPT_LLM_MODEL")
+    started = time.monotonic()
     try:
         result = llm.complete(
             [
@@ -179,10 +185,16 @@ def disambiguate(llm: Any, query: str, timeout: float = 2.5) -> Tuple[Optional[s
             **overrides,
         )
         term, conf = _parse_term(getattr(result, "text", None))
-        logger.info("subprompt: disambiguate %r -> %r", query, term)
+        logger.info(
+            "subprompt: disambiguate %r -> %r (%.1fs)",
+            query, term, time.monotonic() - started,
+        )
         return term, conf
     except Exception as exc:  # noqa: BLE001 — never let resolution break a turn
-        logger.warning("subprompt disambiguate failed for %r: %s", query, exc)
+        logger.warning(
+            "subprompt disambiguate failed for %r after %.1fs: %s",
+            query, time.monotonic() - started, exc,
+        )
         return (None, 0.0)
 
 
