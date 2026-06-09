@@ -182,6 +182,27 @@ class TestDisambiguate:
         llm = SimpleNamespace(complete=boom)
         assert disambiguate(llm, "the thing") == (None, 0.0)
 
+    def test_forwards_provider_model_from_env(self, monkeypatch):
+        captured = {}
+        llm = SimpleNamespace(
+            complete=lambda *a, **kw: captured.update(kw) or _text("X")
+        )
+        monkeypatch.setenv("SUBPROMPT_LLM_PROVIDER", "opencode-go")
+        monkeypatch.setenv("SUBPROMPT_LLM_MODEL", "deepseek-v4-pro")
+        disambiguate(llm, "thing")
+        assert captured["provider"] == "opencode-go"
+        assert captured["model"] == "deepseek-v4-pro"
+
+    def test_no_override_when_env_unset(self, monkeypatch):
+        captured = {}
+        llm = SimpleNamespace(
+            complete=lambda *a, **kw: captured.update(kw) or _text("X")
+        )
+        monkeypatch.delenv("SUBPROMPT_LLM_PROVIDER", raising=False)
+        monkeypatch.delenv("SUBPROMPT_LLM_MODEL", raising=False)
+        disambiguate(llm, "thing")
+        assert "provider" not in captured and "model" not in captured
+
 
 class TestWebLookup:
     def test_returns_snippet(self):

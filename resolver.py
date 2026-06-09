@@ -7,6 +7,7 @@ backends are wired in T3.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import unicodedata
 from collections import OrderedDict
@@ -157,6 +158,14 @@ def disambiguate(llm: Any, query: str, timeout: float = 2.5) -> Tuple[Optional[s
 
     Returns ``(term, confidence)`` or ``(None, 0.0)`` on any failure.
     """
+    # The default host LLM path is the auxiliary model; point it at the
+    # configured provider/model (e.g. the main agent's) when set, since the
+    # auxiliary route may be unfunded or reject this request shape.
+    overrides = {}
+    if os.getenv("SUBPROMPT_LLM_PROVIDER"):
+        overrides["provider"] = os.getenv("SUBPROMPT_LLM_PROVIDER")
+    if os.getenv("SUBPROMPT_LLM_MODEL"):
+        overrides["model"] = os.getenv("SUBPROMPT_LLM_MODEL")
     try:
         result = llm.complete(
             [
@@ -167,6 +176,7 @@ def disambiguate(llm: Any, query: str, timeout: float = 2.5) -> Tuple[Optional[s
             max_tokens=60,
             timeout=timeout,
             purpose="subprompt-disambiguate",
+            **overrides,
         )
         term, conf = _parse_term(getattr(result, "text", None))
         logger.info("subprompt: disambiguate %r -> %r", query, term)
