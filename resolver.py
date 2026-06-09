@@ -256,10 +256,6 @@ def make_callback(llm: Any) -> Callable:
     def _on_pre_llm_call(user_message: str = "", **_kwargs: Any):
         if "{{" not in (user_message or ""):
             return None
-        logger.info(
-            "subprompt: pre_llm_call saw markers=%s in msg=%x",
-            find_markers(user_message), hash(user_message) & 0xFFFFFF,
-        )
         key = hash(user_message)
         served = "cache"
         if key in cache:
