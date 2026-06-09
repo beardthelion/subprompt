@@ -1,0 +1,6 @@
+name: subprompt
+version: "0.1.0"
+description: "Resolve {{fuzzy description}} markers to the correct term before the model anchors on the user's phrasing. Disambiguates via a host LLM call (primary) or web search ({{search: ...}}); appends a fenced clarification to the user message via the pre_llm_call hook."
+author: "Beard"
+hooks:
+  - pre_llm_call
