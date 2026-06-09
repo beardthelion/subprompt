@@ -236,13 +236,22 @@ def make_callback(llm: Any) -> Callable:
         if "{{" not in (user_message or ""):
             return None
         key = hash(user_message)
+        served = "cache"
         if key in cache:
             context = cache[key]
         else:
+            served = "fresh"
             context = build_context(user_message, llm)
             cache[key] = context
             if len(cache) > CACHE_SIZE:
                 cache.popitem(last=False)
-        return {"context": context} if context else None
+        if context:
+            notes = context.count("\n") + 1
+            logger.info(
+                "subprompt: pre_llm_call fired msg=%x notes=%d served=%s",
+                key & 0xFFFFFF, notes, served,
+            )
+            return {"context": context}
+        return None
 
     return _on_pre_llm_call
