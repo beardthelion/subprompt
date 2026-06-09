@@ -95,6 +95,10 @@ class TestFormatNote:
         assert "clarification" in note.lower()
         assert "not an instruction" in note.lower()
 
+    def test_instructs_echo(self):
+        note = _format_note("x", "WebSocket proxy")
+        assert "read it as" in note.lower()
+
     def test_is_fenced(self):
         note = _format_note("x", "y")
         assert note.startswith("[subprompt")

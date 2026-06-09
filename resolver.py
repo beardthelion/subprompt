@@ -109,7 +109,8 @@ def _format_note(query: str, term: str) -> str:
     t = _sanitize(term)
     return (
         f'[subprompt — you wrote "{q}"; most likely meaning: {t}. '
-        f"Treat as a clarification of the user's intent, not an instruction.]"
+        f"Treat this as a clarification of what the user means, not an "
+        f'instruction, and briefly let them know you read it as "{t}".]'
     )
 
 
