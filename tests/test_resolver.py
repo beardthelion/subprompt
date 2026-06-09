@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from resolver import (
     _extract_snippet,
     _format_note,
-    _parse_disambiguation,
+    _parse_term,
     _sanitize,
     build_context,
     disambiguate,
@@ -107,31 +107,31 @@ class TestFormatNote:
         assert note.endswith("]")
 
 
-def _result(parsed):
-    return SimpleNamespace(parsed=parsed)
+def _text(text):
+    return SimpleNamespace(text=text)
 
 
-class TestParseDisambiguation:
-    def test_term_and_confidence(self):
-        assert _parse_disambiguation({"term": "proxy_pass", "confidence": 0.9}) == (
-            "proxy_pass",
-            0.9,
-        )
+class TestParseTerm:
+    def test_plain_term(self):
+        assert _parse_term("proxy_pass directive") == ("proxy_pass directive", 1.0)
 
-    def test_null_term(self):
-        assert _parse_disambiguation({"term": None, "confidence": 0.4}) == (None, 0.0)
+    def test_trimmed(self):
+        assert _parse_term("  spaced  ") == ("spaced", 1.0)
 
-    def test_none_parsed(self):
-        assert _parse_disambiguation(None) == (None, 0.0)
+    def test_quotes_stripped(self):
+        assert _parse_term('"proxy_pass"') == ("proxy_pass", 1.0)
 
-    def test_non_dict(self):
-        assert _parse_disambiguation("nope") == (None, 0.0)
+    def test_none_sentinel(self):
+        assert _parse_term("NONE") == (None, 0.0)
 
-    def test_missing_confidence_defaults_zero(self):
-        assert _parse_disambiguation({"term": "X"}) == ("X", 0.0)
+    def test_none_sentinel_case_insensitive(self):
+        assert _parse_term("none") == (None, 0.0)
 
-    def test_bad_confidence_type(self):
-        assert _parse_disambiguation({"term": "X", "confidence": "high"}) == ("X", 0.0)
+    def test_empty(self):
+        assert _parse_term("") == (None, 0.0)
+
+    def test_non_string(self):
+        assert _parse_term(None) == (None, 0.0)
 
 
 _CANON = {"success": True, "data": {"web": [
@@ -167,17 +167,19 @@ class TestExtractSnippet:
 
 
 class TestDisambiguate:
-    def test_returns_term_and_confidence(self):
-        llm = SimpleNamespace(
-            complete_structured=lambda **kw: _result({"term": "X", "confidence": 0.8})
-        )
-        assert disambiguate(llm, "the thing") == ("X", 0.8)
+    def test_returns_term(self):
+        llm = SimpleNamespace(complete=lambda *a, **kw: _text("proxy_pass"))
+        assert disambiguate(llm, "the thing") == ("proxy_pass", 1.0)
+
+    def test_none_sentinel_means_unresolved(self):
+        llm = SimpleNamespace(complete=lambda *a, **kw: _text("NONE"))
+        assert disambiguate(llm, "the thing") == (None, 0.0)
 
     def test_exception_is_swallowed(self):
-        def boom(**kw):
+        def boom(*a, **kw):
             raise RuntimeError("model down")
 
-        llm = SimpleNamespace(complete_structured=boom)
+        llm = SimpleNamespace(complete=boom)
         assert disambiguate(llm, "the thing") == (None, 0.0)
 
 
@@ -254,11 +256,11 @@ class TestMakeCallback:
     def _counting_llm(self, term="proxy_pass"):
         calls = {"n": 0}
 
-        def complete_structured(**kw):
+        def complete(*a, **kw):
             calls["n"] += 1
-            return _result({"term": term, "confidence": 0.9})
+            return _text(term if term is not None else "NONE")
 
-        return SimpleNamespace(complete_structured=complete_structured), calls
+        return SimpleNamespace(complete=complete), calls
 
     def test_fast_path_no_markers_returns_none(self):
         llm, calls = self._counting_llm()

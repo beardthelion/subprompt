@@ -18,22 +18,17 @@ MAX_RESULT_CHARS = 300
 MAX_MARKERS = 3
 CACHE_SIZE = 256
 
+# Plain-text completion (no response_format/json_schema) so the call works
+# across providers — DeepSeek and others reject structured response_format.
 _DISAMBIGUATE_INSTRUCTIONS = (
     "The user gave a vague description of a technical or factual thing they "
-    "could not name precisely. Convert it into the single precise canonical "
-    "term or short noun phrase that would fit naturally in their sentence. "
-    'Return JSON {"term": string-or-null, "confidence": number 0..1}. '
-    "If you cannot confidently identify what they mean, set term to null."
+    "could not name precisely. Reply with ONLY the single precise canonical "
+    "term or short noun phrase (at most ~8 words) that they mean — no preamble, "
+    "no quotes, no explanation. If you cannot confidently identify what they "
+    "mean, reply with exactly: NONE"
 )
 
-_DISAMBIGUATE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "term": {"type": ["string", "null"]},
-        "confidence": {"type": "number"},
-    },
-    "required": ["term", "confidence"],
-}
+_NONE_SENTINEL = "NONE"
 
 # Bracket/brace chars get folded so resolved text cannot break out of the
 # fenced note or be misread as a fresh {{marker}}.
@@ -122,19 +117,19 @@ def _format_search_note(query: str, snippet: str) -> str:
     )
 
 
-def _parse_disambiguation(parsed: Any) -> Tuple[Optional[str], float]:
-    """Pull ``(term, confidence)`` out of an LLM structured result.
+def _parse_term(text: Any) -> Tuple[Optional[str], float]:
+    """Turn a plain-text disambiguation reply into ``(term, confidence)``.
 
-    Tolerates missing/null/wrong-typed fields; never raises.
+    Strips surrounding quotes/whitespace; the ``NONE`` sentinel (or empty)
+    means unresolved. Confidence is nominal (1.0 resolved / 0.0 not) since
+    plain-text replies carry no score.
     """
-    if not isinstance(parsed, dict):
+    if not isinstance(text, str):
         return (None, 0.0)
-    term = parsed.get("term")
-    if not term or not isinstance(term, str):
+    term = text.strip().strip('"').strip("'").strip()
+    if not term or term.upper() == _NONE_SENTINEL:
         return (None, 0.0)
-    raw_conf = parsed.get("confidence")
-    confidence = float(raw_conf) if isinstance(raw_conf, (int, float)) else 0.0
-    return (term.strip(), confidence)
+    return (term, 1.0)
 
 
 def _extract_snippet(response: Any) -> Optional[str]:
@@ -163,17 +158,21 @@ def disambiguate(llm: Any, query: str, timeout: float = 2.5) -> Tuple[Optional[s
     Returns ``(term, confidence)`` or ``(None, 0.0)`` on any failure.
     """
     try:
-        result = llm.complete_structured(
-            instructions=_DISAMBIGUATE_INSTRUCTIONS,
-            input=[{"type": "text", "text": query}],
-            json_schema=_DISAMBIGUATE_SCHEMA,
-            schema_name="subprompt_disambiguation",
+        result = llm.complete(
+            [
+                {"role": "system", "content": _DISAMBIGUATE_INSTRUCTIONS},
+                {"role": "user", "content": query},
+            ],
+            temperature=0.0,
+            max_tokens=60,
             timeout=timeout,
             purpose="subprompt-disambiguate",
         )
-        return _parse_disambiguation(getattr(result, "parsed", None))
+        term, conf = _parse_term(getattr(result, "text", None))
+        logger.info("subprompt: disambiguate %r -> %r", query, term)
+        return term, conf
     except Exception as exc:  # noqa: BLE001 — never let resolution break a turn
-        logger.debug("subprompt disambiguate failed for %r: %s", query, exc)
+        logger.warning("subprompt disambiguate failed for %r: %s", query, exc)
         return (None, 0.0)
 
 
@@ -235,6 +234,10 @@ def make_callback(llm: Any) -> Callable:
     def _on_pre_llm_call(user_message: str = "", **_kwargs: Any):
         if "{{" not in (user_message or ""):
             return None
+        logger.info(
+            "subprompt: pre_llm_call saw markers=%s in msg=%x",
+            find_markers(user_message), hash(user_message) & 0xFFFFFF,
+        )
         key = hash(user_message)
         served = "cache"
         if key in cache:
