@@ -2,7 +2,9 @@
 
 from types import SimpleNamespace
 
-from selfcheck import check_trust_config, run_selfcheck
+from pathlib import Path
+
+from selfcheck import check_trust_config, load_trust_block, run_selfcheck
 
 
 def _text(text):
@@ -50,3 +52,25 @@ class TestCheckTrustConfig:
 
     def test_no_env_no_warnings(self):
         assert check_trust_config(None, None, {}) == []
+
+
+class TestLoadTrustBlock:
+    def test_reads_nested_block(self, tmp_path):
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "plugins:\n"
+            "  entries:\n"
+            "    subprompt:\n"
+            "      llm:\n"
+            "        allow_provider_override: true\n"
+        )
+        block = load_trust_block(cfg)
+        assert block == {"allow_provider_override": True}
+
+    def test_missing_file_returns_none(self, tmp_path):
+        assert load_trust_block(tmp_path / "nope.yaml") is None
+
+    def test_block_absent_returns_empty(self, tmp_path):
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("plugins:\n  enabled:\n    - subprompt\n")
+        assert load_trust_block(cfg) == {}

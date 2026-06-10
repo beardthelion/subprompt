@@ -7,9 +7,12 @@ in ``__main__.py``.
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Any, List, NamedTuple, Optional
 
 from resolver import RESOLVE_TIMEOUT, disambiguate
+
+DEFAULT_CONFIG_PATH = Path.home() / ".hermes" / "config.yaml"
 
 PROBE = "the nginx thing for websockets"
 
@@ -50,3 +53,18 @@ def check_trust_config(
             "in the trust block; the override will be silently ignored."
         )
     return warnings
+
+
+def load_trust_block(config_path: Path = DEFAULT_CONFIG_PATH):
+    """Read ``plugins.entries.subprompt.llm`` from the host config.
+
+    Returns the block dict (``{}`` if the keys are absent), or ``None`` if the
+    file can't be read/parsed — caller treats None as "skip the static check".
+    """
+    try:
+        import yaml
+        data = yaml.safe_load(config_path.read_text()) or {}
+    except Exception:
+        return None
+    entries = ((data.get("plugins") or {}).get("entries") or {})
+    return (entries.get("subprompt") or {}).get("llm") or {}
