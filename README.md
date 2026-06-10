@@ -31,6 +31,21 @@ The resolved text is appended as a low-trust note, e.g.:
  "WebSocket proxy".]
 ```
 
+### What you see back
+
+When an `{{ask:}}` marker resolves, SubPrompt prepends a one-line receipt to the
+reply so you know it worked and get the term you couldn't name:
+
+```
+↳ read "the nginx thing for websockets" as WebSocket proxy
+
+<the assistant's normal reply>
+```
+
+The model is also asked to acknowledge the reading naturally, so you may see it
+mentioned twice — once as the exact receipt, once in the model's own words.
+`{{search:}}` markers do not produce a receipt.
+
 ## How it works
 
 Registers on the `pre_llm_call` hook, which fires once per user turn inside
@@ -81,6 +96,23 @@ can leak chain-of-thought into the term.
   says "ignore previous instructions" is contained and labelled, not
   neutralized. The fenced low-trust placement mitigates; it does not eliminate.
 - **Privacy.** Marker contents are sent to your configured LLM/search provider.
+- **Each resolved marker costs one model (or search) call.** Marker contents are
+  sent to your configured provider; budget accordingly.
+- **Unresolved markers degrade silently.** If a marker can't be resolved (model
+  unavailable, returns NONE), it is dropped and the message passes through
+  unchanged rather than erroring. Run `selfcheck` if resolution seems absent.
+
+## Self-check
+
+Verify the plugin will actually resolve markers on this machine:
+
+```
+python -m subprompt selfcheck
+```
+
+It reports the provider/model overrides it sees, warns if an env override is set
+but the trust block won't honor it, then runs a real probe and prints the term
+and latency. Exit code 0 means a working setup; non-zero says which stage failed.
 
 ## Tests
 
