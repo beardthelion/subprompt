@@ -1,6 +1,6 @@
 """SubPrompt self-check: end-to-end probe + static config diagnostics.
 
-Pure logic only — no host imports. The CLI wiring (building a PluginLlm) lives
+Pure logic only, no host imports. The CLI wiring (building a PluginLlm) lives
 in ``__main__.py``.
 """
 
@@ -59,7 +59,7 @@ def load_trust_block(config_path: Path = DEFAULT_CONFIG_PATH):
     """Read ``plugins.entries.subprompt.llm`` from the host config.
 
     Returns the block dict (``{}`` if the keys are absent), or ``None`` if the
-    file can't be read/parsed — caller treats None as "skip the static check".
+    file can't be read/parsed (caller treats None as "skip the static check").
     """
     try:
         import yaml

@@ -43,7 +43,7 @@ reply so you know it worked and get the term you couldn't name:
 ```
 
 The model is also asked to acknowledge the reading naturally, so you may see it
-mentioned twice — once as the exact receipt, once in the model's own words.
+mentioned twice: once as the exact receipt, once in the model's own words.
 `{{search:}}` markers do not produce a receipt.
 
 ## How it works

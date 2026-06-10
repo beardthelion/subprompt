@@ -28,6 +28,6 @@ def register(ctx) -> None:
     ctx.register_hook("pre_llm_call", pre)
     ctx.register_hook("transform_llm_output", transform)
     logger.info(
-        "SubPrompt plugin loaded — resolving {{markers}} via pre_llm_call, "
+        "SubPrompt plugin loaded: resolving {{markers}} via pre_llm_call, "
         "receipts via transform_llm_output"
     )

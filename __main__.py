@@ -1,4 +1,4 @@
-"""``python -m subprompt selfcheck`` — verify this box will resolve markers."""
+"""``python -m subprompt selfcheck``: verify this box will resolve markers."""
 
 from __future__ import annotations
 
