@@ -68,3 +68,29 @@ def load_trust_block(config_path: Path = DEFAULT_CONFIG_PATH):
         return None
     entries = ((data.get("plugins") or {}).get("entries") or {})
     return (entries.get("subprompt") or {}).get("llm") or {}
+
+
+def is_oauth_provider(auth_type: Optional[str]) -> bool:
+    """True for OAuth auth types, which a standalone process can't authenticate.
+
+    The gateway holds a refreshed OAuth token; a bare ``python -m subprompt``
+    process does not, so a live probe against an OAuth provider would fail even
+    when the in-gateway path works.
+    """
+    return bool(auth_type) and auth_type.startswith("oauth")
+
+
+def provider_auth_type(provider_id: Optional[str]) -> Optional[str]:
+    """Look up a provider's ``auth_type`` from the host profiles, or None.
+
+    None means "unknown" (provider not given, or host profiles unavailable),
+    in which case the caller should just run the probe normally.
+    """
+    if not provider_id:
+        return None
+    try:
+        from providers import get_provider_profile
+        profile = get_provider_profile(provider_id)
+        return getattr(profile, "auth_type", None) if profile else None
+    except Exception:
+        return None

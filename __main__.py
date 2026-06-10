@@ -11,7 +11,14 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from resolver import RESOLVE_TIMEOUT  # noqa: E402
-from selfcheck import PROBE, check_trust_config, load_trust_block, run_selfcheck  # noqa: E402
+from selfcheck import (  # noqa: E402
+    PROBE,
+    check_trust_config,
+    is_oauth_provider,
+    load_trust_block,
+    provider_auth_type,
+    run_selfcheck,
+)
 
 
 def main(argv=None) -> int:
@@ -38,6 +45,14 @@ def main(argv=None) -> int:
                 print(f"    ! {w}")
         else:
             print("  trust block       : override allowed")
+
+    auth_type = provider_auth_type(env_provider)
+    if is_oauth_provider(auth_type):
+        print(f"  probe             : skipped ({env_provider} uses {auth_type})")
+        print("    a standalone process can't hold the gateway's OAuth token, so a")
+        print("    live probe here would fail even when in-gateway resolution works.")
+        print("    config looks valid; send a live {marker} through the gateway to confirm.")
+        return 0
 
     try:
         from agent.plugin_llm import PluginLlm

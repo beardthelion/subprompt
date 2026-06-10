@@ -4,7 +4,12 @@ from types import SimpleNamespace
 
 from pathlib import Path
 
-from selfcheck import check_trust_config, load_trust_block, run_selfcheck
+from selfcheck import (
+    check_trust_config,
+    is_oauth_provider,
+    load_trust_block,
+    run_selfcheck,
+)
 
 
 def _text(text):
@@ -74,3 +79,17 @@ class TestLoadTrustBlock:
         cfg = tmp_path / "config.yaml"
         cfg.write_text("plugins:\n  enabled:\n    - subprompt\n")
         assert load_trust_block(cfg) == {}
+
+
+class TestIsOauthProvider:
+    def test_oauth_device_code(self):
+        assert is_oauth_provider("oauth_device_code") is True
+
+    def test_oauth_external(self):
+        assert is_oauth_provider("oauth_external") is True
+
+    def test_api_key(self):
+        assert is_oauth_provider("api_key") is False
+
+    def test_none(self):
+        assert is_oauth_provider(None) is False
