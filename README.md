@@ -35,6 +35,10 @@ hermes-gateway.service`, or however you run Hermes). That's enough to start
 resolving markers on the host's default model; see Configuration to point it at
 a specific one. No API keys of its own: it uses the host's LLM access.
 
+Drop-in is the supported install. It matches how Hermes discovers
+`~/.hermes/plugins/`, so it lands in the right place every time. A pip-installable
+package may come later if there's demand, but it isn't needed today.
+
 ## Marker grammar
 
 | Marker | Resolver |
@@ -169,11 +173,6 @@ tells you to confirm with a live marker through the gateway.
 ```
 python -m pytest tests/ -v
 ```
-
-## Status
-
-Phase 1 (Hermes gateway plugin). Phases 2–3 (browser extension, OS-level)
-are out of scope here.
 
 ## License
 
