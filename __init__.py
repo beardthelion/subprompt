@@ -17,12 +17,17 @@ from __future__ import annotations
 
 import logging
 
-from .resolver import make_callback
+from .resolver import make_callbacks
 
 logger = logging.getLogger(__name__)
 
 
 def register(ctx) -> None:
-    """Plugin entrypoint: wire marker resolution onto ``pre_llm_call``."""
-    ctx.register_hook("pre_llm_call", make_callback(ctx.llm))
-    logger.info("SubPrompt plugin loaded — resolving {{markers}} via pre_llm_call")
+    """Plugin entrypoint: wire marker resolution and the user-facing receipt."""
+    pre, transform = make_callbacks(ctx.llm)
+    ctx.register_hook("pre_llm_call", pre)
+    ctx.register_hook("transform_llm_output", transform)
+    logger.info(
+        "SubPrompt plugin loaded — resolving {{markers}} via pre_llm_call, "
+        "receipts via transform_llm_output"
+    )

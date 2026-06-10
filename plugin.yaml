@@ -4,3 +4,4 @@ description: "Resolve {{fuzzy description}} markers to the correct term before t
 author: "Beard"
 hooks:
   - pre_llm_call
+  - transform_llm_output
