@@ -272,16 +272,16 @@ def build_context(
     ``search_fn`` (web). Markers that don't resolve are dropped. Resolution
     is capped at ``max_markers``.
     """
-    notes: List[str] = []
-    for kind, query in find_markers(user_message)[:max_markers]:
-        if kind == "search":
-            snippet = search_fn(query)
-            if snippet:
-                notes.append(_format_search_note(query, snippet))
-        else:
-            term, _confidence = disambiguate_fn(llm, query)
-            if term:
-                notes.append(_format_note(query, term))
+    notes = [
+        r.note
+        for r in resolve_markers(
+            user_message,
+            llm,
+            max_markers=max_markers,
+            disambiguate_fn=disambiguate_fn,
+            search_fn=search_fn,
+        )
+    ]
     return "\n".join(notes) if notes else None
 
 
