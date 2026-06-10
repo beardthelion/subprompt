@@ -86,6 +86,14 @@ SUBPROMPT_LLM_TIMEOUT=12               # seconds (optional)
 Use a small/fast model. Heavyweight reasoning models are slow (10s–70s+) and
 can leak chain-of-thought into the term.
 
+`SUBPROMPT_LLM_TIMEOUT` is the budget for each attempt, and the host retries
+down its fallback chain, so a slow model that gets cut off mid-attempt will
+burn `timeout × attempts` and still fail. If you must use a slow or free-tier
+model, raise the timeout rather than assuming the model is broken. A free tier
+that resolves fine in ~30s will time out and fall through with the 12s default;
+bumping `SUBPROMPT_LLM_TIMEOUT` to ~45 lets the first attempt finish. The cost
+is that every marker-bearing message waits that long before the reply.
+
 ## Security
 
 - **Search-only.** Never fetches a URL or calls `.extract()`; URL/IP markers
