@@ -136,6 +136,19 @@ def _format_search_note(query: str, snippet: str) -> str:
     )
 
 
+def _format_receipt(pairs: List[Tuple[str, str]]) -> Optional[str]:
+    """Render ``ask`` resolutions as a compact user-facing receipt block.
+
+    One ``↳ read "<query>" as <term>`` line per pair, sanitized. Returns None
+    when there is nothing to confirm.
+    """
+    if not pairs:
+        return None
+    return "\n".join(
+        f'↳ read "{_sanitize(q)}" as {_sanitize(t)}' for q, t in pairs
+    )
+
+
 def _parse_term(text: Any) -> Tuple[Optional[str], float]:
     """Turn a plain-text disambiguation reply into ``(term, confidence)``.
 

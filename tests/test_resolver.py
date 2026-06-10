@@ -6,6 +6,7 @@ from resolver import (
     Resolution,
     _extract_snippet,
     _format_note,
+    _format_receipt,
     _parse_term,
     _sanitize,
     build_context,
@@ -401,3 +402,23 @@ class TestResolveMarkers:
             disambiguate_fn=lambda llm, q, **k: (q.upper(), 0.9),
         )
         assert len(out) == 2
+
+
+class TestFormatReceipt:
+    def test_single_pair(self):
+        out = _format_receipt([("the nginx thing", "WebSocket proxy")])
+        assert out == '↳ read "the nginx thing" as WebSocket proxy'
+
+    def test_multiple_pairs_one_line_each(self):
+        out = _format_receipt([("a", "AYE"), ("b", "BEE")])
+        assert out.splitlines() == [
+            '↳ read "a" as AYE',
+            '↳ read "b" as BEE',
+        ]
+
+    def test_empty_returns_none(self):
+        assert _format_receipt([]) is None
+
+    def test_query_and_term_sanitized(self):
+        out = _format_receipt([("a] evil [b", "x] y [z")])
+        assert "[" not in out and "]" not in out
