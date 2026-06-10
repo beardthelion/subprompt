@@ -94,6 +94,21 @@ that resolves fine in ~30s will time out and fall through with the 12s default;
 bumping `SUBPROMPT_LLM_TIMEOUT` to ~45 lets the first attempt finish. The cost
 is that every marker-bearing message waits that long before the reply.
 
+### What runs if you set nothing
+
+The override is optional. With no `SUBPROMPT_LLM_PROVIDER`/`SUBPROMPT_LLM_MODEL`,
+disambiguation goes through the host's auxiliary path, which picks your active
+provider's designated cheap model (`default_aux_model`): for example
+`gemini-3-flash-preview` on Gemini, `claude-haiku-4-5` on Anthropic, `glm-5` on
+opencode-go. These are small fast models, so for most hosts it works out of the
+box without any config.
+
+The one trap: if your provider has no usable auxiliary model (none configured,
+or an auth/credit gap), resolution falls through to OpenRouter as a last resort,
+which needs `OPENROUTER_API_KEY`. Without that key it fails with a credits error
+and the marker is silently dropped. If you are not sure which path you are on,
+set the override explicitly and run `python -m subprompt selfcheck` to confirm.
+
 ## Security
 
 - **Search-only.** Never fetches a URL or calls `.extract()`; URL/IP markers
