@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 MAX_RESULT_CHARS = 300
 MAX_MARKERS = 3
 CACHE_SIZE = 256
+# A receipt stash entry older than this (interrupted turn that never reached the
+# finalizer) is dropped rather than prepended to a later, unrelated reply.
+STASH_TTL = 30.0
 # Disambiguation runs in the agent's own turn thread (off the gateway loop),
 # so a slow main model only delays that one reply. Generous default; the
 # main agent model can be heavyweight. Override via SUBPROMPT_LLM_TIMEOUT.
@@ -298,35 +301,59 @@ def build_context(
     return "\n".join(notes) if notes else None
 
 
-def make_callback(llm: Any) -> Callable:
-    """Build the ``pre_llm_call`` hook callback.
+def make_callbacks(llm: Any) -> Tuple[Callable, Callable]:
+    """Build the (pre_llm_call, transform_llm_output) hook callbacks.
 
-    Fast-paths messages without markers, and caches resolution per unique
-    user message so a multi-step turn (which may fire the hook repeatedly)
-    only spends the LLM/search once.
+    ``pre_llm_call`` injects the fenced notes into the model's context (caching
+    resolution per unique message) and stashes the turn's ``ask`` resolutions
+    keyed by session. ``transform_llm_output`` consumes that stash once and
+    prepends a compact receipt to the outbound reply.
     """
-    cache: "OrderedDict[int, Optional[str]]" = OrderedDict()
+    cache: "OrderedDict[int, List[Resolution]]" = OrderedDict()
+    stash: dict = {}  # session_id -> (monotonic_ts, [(query, term), ...])
 
-    def _on_pre_llm_call(user_message: str = "", **_kwargs: Any):
+    def _on_pre_llm_call(user_message: str = "", session_id: str = "", **_kwargs: Any):
         if "{{" not in (user_message or ""):
             return None
         key = hash(user_message)
         served = "cache"
         if key in cache:
-            context = cache[key]
+            resolutions = cache[key]
         else:
             served = "fresh"
-            context = build_context(user_message, llm)
-            cache[key] = context
+            resolutions = resolve_markers(user_message, llm)
+            cache[key] = resolutions
             if len(cache) > CACHE_SIZE:
                 cache.popitem(last=False)
-        if context:
-            notes = context.count("\n") + 1
+        ask_pairs = [(r.query, r.term) for r in resolutions if r.kind == "ask"]
+        if ask_pairs and session_id:
+            stash[session_id] = (time.monotonic(), ask_pairs)
+        notes = "\n".join(r.note for r in resolutions)
+        if notes:
             logger.info(
                 "subprompt: pre_llm_call fired msg=%x notes=%d served=%s",
-                key & 0xFFFFFF, notes, served,
+                key & 0xFFFFFF, notes.count("\n") + 1, served,
             )
-            return {"context": context}
+            return {"context": notes}
         return None
 
-    return _on_pre_llm_call
+    def _on_transform_llm_output(response_text: str = "", session_id: str = "", **_kwargs: Any):
+        if not session_id:
+            return None
+        entry = stash.pop(session_id, None)
+        if not entry:
+            return None
+        ts, pairs = entry
+        if time.monotonic() - ts > STASH_TTL:
+            return None
+        receipt = _format_receipt(pairs)
+        if not receipt:
+            return None
+        return f"{receipt}\n\n{response_text}"
+
+    return _on_pre_llm_call, _on_transform_llm_output
+
+
+def make_callback(llm: Any) -> Callable:
+    """Back-compat: the pre_llm_call callback alone."""
+    return make_callbacks(llm)[0]

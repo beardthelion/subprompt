@@ -13,6 +13,7 @@ from resolver import (
     disambiguate,
     find_markers,
     make_callback,
+    make_callbacks,
     resolve_markers,
     web_lookup,
 )
@@ -422,3 +423,49 @@ class TestFormatReceipt:
     def test_query_and_term_sanitized(self):
         out = _format_receipt([("a] evil [b", "x] y [z")])
         assert "[" not in out and "]" not in out
+
+
+class TestDualCallbacks:
+    def _llm(self, term="WebSocket proxy"):
+        return SimpleNamespace(
+            complete=lambda *a, **kw: _text(term if term is not None else "NONE")
+        )
+
+    def test_pre_injects_context_and_transform_prepends_receipt(self):
+        pre, transform = make_callbacks(self._llm())
+        ctx = pre(user_message="set up {{the nginx thing}}", session_id="s1")
+        assert "WebSocket proxy" in ctx["context"]
+        out = transform(response_text="Here's how.", session_id="s1")
+        assert out.startswith('↳ read "the nginx thing" as WebSocket proxy')
+        assert out.endswith("Here's how.")
+
+    def test_transform_consumes_once(self):
+        pre, transform = make_callbacks(self._llm())
+        pre(user_message="{{the nginx thing}}", session_id="s1")
+        first = transform(response_text="A", session_id="s1")
+        second = transform(response_text="B", session_id="s1")
+        assert first is not None
+        assert second is None  # stash cleared after first consume
+
+    def test_transform_no_stash_returns_none(self):
+        pre, transform = make_callbacks(self._llm())
+        assert transform(response_text="hi", session_id="never-resolved") is None
+
+    def test_search_marker_produces_no_receipt(self):
+        pre, transform = make_callbacks(self._llm())
+        pre(user_message="{{search: x}}", session_id="s2")
+        # search resolutions are not receipted; with no ask pairs, nothing prepends
+        assert transform(response_text="body", session_id="s2") is None
+
+    def test_stale_stash_is_dropped(self, monkeypatch):
+        import resolver as R
+        pre, transform = make_callbacks(self._llm())
+        pre(user_message="{{the nginx thing}}", session_id="s1")
+        real = R.time.monotonic
+        monkeypatch.setattr(R.time, "monotonic", lambda: real() + R.STASH_TTL + 1)
+        assert transform(response_text="late", session_id="s1") is None
+
+    def test_make_callback_alias_still_works(self):
+        cb = make_callback(self._llm())
+        out = cb(user_message="use {{the nginx thing}}")
+        assert "WebSocket proxy" in out["context"]
