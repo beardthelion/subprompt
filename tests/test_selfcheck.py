@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 
-from selfcheck import run_selfcheck
+from selfcheck import check_trust_config, run_selfcheck
 
 
 def _text(text):
@@ -29,3 +29,24 @@ class TestRunSelfcheck:
 
         result = run_selfcheck(SimpleNamespace(complete=boom))
         assert result.ok is False
+
+
+class TestCheckTrustConfig:
+    def test_provider_override_blocked(self):
+        warns = check_trust_config("opencode-go", None, {})
+        assert any("allow_provider_override" in w for w in warns)
+
+    def test_model_override_blocked(self):
+        warns = check_trust_config(None, "deepseek-v4-flash", {})
+        assert any("allow_model_override" in w for w in warns)
+
+    def test_overrides_allowed_no_warnings(self):
+        warns = check_trust_config(
+            "opencode-go",
+            "deepseek-v4-flash",
+            {"allow_provider_override": True, "allow_model_override": True},
+        )
+        assert warns == []
+
+    def test_no_env_no_warnings(self):
+        assert check_trust_config(None, None, {}) == []
