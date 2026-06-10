@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 
 from resolver import (
+    Resolution,
     _extract_snippet,
     _format_note,
     _parse_term,
@@ -11,6 +12,7 @@ from resolver import (
     disambiguate,
     find_markers,
     make_callback,
+    resolve_markers,
     web_lookup,
 )
 
@@ -359,3 +361,43 @@ class TestInjectionContainment:
         )
         assert out.startswith("[subprompt")
         assert "not an instruction" in out.lower()
+
+
+class TestResolveMarkers:
+    def test_ask_resolution_carries_query_and_term(self):
+        out = resolve_markers(
+            "set up {{the nginx thing}} please",
+            llm=None,
+            disambiguate_fn=lambda llm, q, **k: ("WebSocket proxy", 0.9),
+        )
+        assert len(out) == 1
+        assert out[0].kind == "ask"
+        assert out[0].query == "the nginx thing"
+        assert out[0].term == "WebSocket proxy"
+        assert "WebSocket proxy" in out[0].note
+
+    def test_search_resolution_carries_snippet(self):
+        out = resolve_markers(
+            "pop of {{search: australia capital}}",
+            llm=None,
+            search_fn=lambda q, **k: "Canberra — capital of Australia",
+        )
+        assert len(out) == 1
+        assert out[0].kind == "search"
+        assert out[0].term == "Canberra — capital of Australia"
+        assert "search" in out[0].note.lower()
+
+    def test_unresolved_dropped(self):
+        out = resolve_markers(
+            "{{x}}", llm=None, disambiguate_fn=lambda llm, q, **k: (None, 0.0)
+        )
+        assert out == []
+
+    def test_cap_at_max_markers(self):
+        out = resolve_markers(
+            "{{a}} {{b}} {{c}} {{d}}",
+            llm=None,
+            max_markers=2,
+            disambiguate_fn=lambda llm, q, **k: (q.upper(), 0.9),
+        )
+        assert len(out) == 2

@@ -12,7 +12,7 @@ import re
 import time
 import unicodedata
 from collections import OrderedDict
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, List, NamedTuple, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,18 @@ _BREAKOUT_MAP = {
 MARKER_RE = re.compile(r"\{\{(?:(search|ask):\s*)?(.+?)\}\}")
 
 _IPV4_RE = re.compile(r"\d{1,3}(?:\.\d{1,3}){3}")
+
+
+class Resolution(NamedTuple):
+    """One resolved marker: the model note plus the structured value.
+
+    ``term`` is the disambiguated term (``ask``) or the snippet (``search``);
+    it feeds the user-facing receipt, which renders ``ask`` resolutions only.
+    """
+    kind: str
+    query: str
+    note: str
+    term: str
 
 
 def _looks_like_url(query: str) -> bool:
@@ -216,6 +228,34 @@ def web_lookup(query: str, timeout: float = 2.5, provider: Any = None) -> Option
     except Exception as exc:  # noqa: BLE001
         logger.debug("subprompt web_lookup failed for %r: %s", query, exc)
         return None
+
+
+def resolve_markers(
+    user_message: str,
+    llm: Any,
+    *,
+    max_markers: int = MAX_MARKERS,
+    disambiguate_fn: Callable = disambiguate,
+    search_fn: Callable = web_lookup,
+) -> List[Resolution]:
+    """Resolve each marker into a structured :class:`Resolution`, in order.
+
+    Markers that don't resolve are dropped. Resolution is capped at
+    ``max_markers``.
+    """
+    out: List[Resolution] = []
+    for kind, query in find_markers(user_message)[:max_markers]:
+        if kind == "search":
+            snippet = search_fn(query)
+            if snippet:
+                out.append(
+                    Resolution("search", query, _format_search_note(query, snippet), snippet)
+                )
+        else:
+            term, _confidence = disambiguate_fn(llm, query)
+            if term:
+                out.append(Resolution("ask", query, _format_note(query, term), term))
+    return out
 
 
 def build_context(
