@@ -13,6 +13,28 @@ SubPrompt disambiguates `the nginx thing for websockets` → `WebSocket proxy`
 and appends a fenced clarification to your message, so the model anchors on
 the correct term instead of running with your fumbled phrasing.
 
+## Install
+
+SubPrompt is a drop-in Hermes Agent plugin. Clone it into your user plugin
+directory, enable it, and restart the gateway:
+
+```
+git clone https://github.com/beardthelion/subprompt ~/.hermes/plugins/subprompt
+```
+
+Then add it to the `plugins.enabled` list in `~/.hermes/config.yaml`:
+
+```yaml
+plugins:
+  enabled:
+    - subprompt
+```
+
+Restart the gateway so the plugin loads (`systemctl --user restart
+hermes-gateway.service`, or however you run Hermes). That's enough to start
+resolving markers on the host's default model; see Configuration to point it at
+a specific one. No API keys of its own: it uses the host's LLM access.
+
 ## Marker grammar
 
 | Marker | Resolver |
@@ -137,6 +159,11 @@ It reports the provider/model overrides it sees, warns if an env override is set
 but the trust block won't honor it, then runs a real probe and prints the term
 and latency. Exit code 0 means a working setup; non-zero says which stage failed.
 
+If your provider uses OAuth (e.g. nous), the probe is skipped: a standalone
+process can't hold the gateway's OAuth token, so a probe here would fail even
+when in-gateway resolution works. The check still validates your config and
+tells you to confirm with a live marker through the gateway.
+
 ## Tests
 
 ```
@@ -147,3 +174,7 @@ python -m pytest tests/ -v
 
 Phase 1 (Hermes gateway plugin). Phases 2–3 (browser extension, OS-level)
 are out of scope here.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
