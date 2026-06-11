@@ -1,7 +1,9 @@
 # SubPrompt
 
 A Hermes Agent plugin that resolves inline `{{...}}` markers in a message
-*before* the model reads it — closing the user's **articulation gap**.
+*before* the model reads it, closing the user's **articulation gap**.
+
+https://github.com/beardthelion/subprompt/releases/download/v0.1.0/subprompt-demo.mp4
 
 When you can't name a thing precisely, bracket your fuzzy description:
 
@@ -106,7 +108,7 @@ plugins:
 ```
 SUBPROMPT_LLM_PROVIDER=opencode-go     # else the auxiliary model path is used
 SUBPROMPT_LLM_MODEL=deepseek-v4-flash  # use a FAST model — reasoning models are slow
-SUBPROMPT_LLM_TIMEOUT=12               # seconds (optional)
+SUBPROMPT_LLM_TIMEOUT=45               # seconds per attempt (optional); raise for slow/free tiers
 ```
 
 Use a small/fast model. Heavyweight reasoning models are slow (10s–70s+) and
