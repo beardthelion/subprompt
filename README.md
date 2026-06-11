@@ -3,7 +3,9 @@
 A Hermes Agent plugin that resolves inline `{{...}}` markers in a message
 *before* the model reads it, closing the user's **articulation gap**.
 
-https://github.com/beardthelion/subprompt/releases/download/v0.1.0/subprompt-demo.mp4
+![SubPrompt demo](media/subprompt-demo.gif)
+
+*[Demo with narration (mp4)](https://github.com/beardthelion/subprompt/releases/download/v0.1.0/subprompt-demo.mp4)*
 
 When you can't name a thing precisely, bracket your fuzzy description:
 
